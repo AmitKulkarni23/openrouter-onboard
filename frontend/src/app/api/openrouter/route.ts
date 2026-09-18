@@ -13,14 +13,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const cleanKey = apiKey.replace(/[^\x20-\x7E]/g, "").trim();
     const url = `${OPENROUTER_BASE}${endpoint}`;
-    const maskedKey = apiKey.slice(0, 8) + "***" + apiKey.slice(-2);
+    const maskedKey = cleanKey.slice(0, 8) + "***" + cleanKey.slice(-2);
 
     console.log(`[proxy] ${method} ${url} | key: ${maskedKey}`);
     if (body) console.log(`[proxy] body: ${JSON.stringify(body)}`);
 
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${cleanKey}`,
       "Content-Type": "application/json",
       "HTTP-Referer": "https://github.com/AmitKulkarni23/openrouter-onboard",
       "X-Title": "OpenRouter Onboard",
