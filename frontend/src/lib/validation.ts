@@ -1,3 +1,9 @@
+/**
+ * Local-only validation: checks the YAML manifest structure and values
+ * without making any network calls. Used in LOCAL MODE and as the
+ * fallback when no API key is present.
+ */
+
 export interface ValidationResult {
   passed: boolean;
   checks: Check[];

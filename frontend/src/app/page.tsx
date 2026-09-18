@@ -1,3 +1,9 @@
+/**
+ * Main application page — split-pane layout with a YAML editor (left)
+ * and sequential onboarding checklist (right). Supports two modes:
+ *   LOCAL MODE  — validates YAML structure offline
+ *   CONNECTED   — proxies real calls to OpenRouter's API via /api/openrouter
+ */
 "use client";
 
 import { useState, useCallback, useRef } from "react";
@@ -15,6 +21,7 @@ import { useTheme } from "@mui/material/styles";
 import { DEFAULT_MANIFEST } from "@/lib/default-manifest";
 import { STEPS } from "@/lib/steps";
 import { validateStep, type ValidationResult, type Check } from "@/lib/validation";
+import { validateStepConnected } from "@/lib/connected-validation";
 
 type StepState = "locked" | "active" | "passed" | "failed";
 
@@ -62,13 +69,26 @@ export default function Home() {
     }
   };
 
+  // Extract the API key from the YAML when connected mode needs it
+  const apiKey = parsedManifest
+    ? ((parsedManifest as Record<string, Record<string, unknown>>).organization?.api_key as string | null)
+    : null;
+
   const handleVerify = useCallback(async () => {
     if (currentStep === -1 || !parsedManifest) return;
     setVerifying(true);
 
-    await new Promise((r) => setTimeout(r, 600 + Math.random() * 400));
+    let result: ValidationResult;
 
-    const result = validateStep(currentStep, parsedManifest);
+    if (connected && apiKey) {
+      // Connected mode: make real API calls through the proxy
+      result = await validateStepConnected(currentStep, parsedManifest, apiKey);
+    } else {
+      // Local mode: validate YAML structure only
+      await new Promise((r) => setTimeout(r, 600 + Math.random() * 400));
+      result = validateStep(currentStep, parsedManifest);
+    }
+
     const newStates = [...stepStates];
     const newResults = [...stepResults];
 
@@ -86,7 +106,7 @@ export default function Home() {
     setStepStates(newStates);
     setStepResults(newResults);
     setVerifying(false);
-  }, [currentStep, parsedManifest, stepStates, stepResults]);
+  }, [currentStep, parsedManifest, stepStates, stepResults, connected, apiKey]);
 
   const lineCount = yamlText.split("\n").length;
   const allPassed = stepStates.every((s) => s === "passed");
@@ -162,7 +182,13 @@ export default function Home() {
             <Button
               size="small"
               startIcon={<LinkIcon sx={{ fontSize: "14px !important" }} />}
-              onClick={() => setConnected(true)}
+              onClick={() => {
+                if (!apiKey) {
+                  setParseError("Set organization.api_key in the YAML to connect");
+                  return;
+                }
+                setConnected(true);
+              }}
               sx={{
                 fontSize: "0.6875rem",
                 color: "text.secondary",

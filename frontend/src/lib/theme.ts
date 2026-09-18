@@ -1,3 +1,8 @@
+/**
+ * MUI theme following the Construction Grid (Crouwel) design direction.
+ * All borderRadius: 0 and no shadows — the grid-paper aesthetic uses
+ * borders and background fills instead.
+ */
 "use client";
 
 import { createTheme } from "@mui/material/styles";

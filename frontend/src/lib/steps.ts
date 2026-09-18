@@ -1,3 +1,8 @@
+/**
+ * Step definitions for the 14-day enterprise onboarding timeline.
+ * Steps unlock sequentially — each must pass before the next activates.
+ */
+
 export interface Step {
   title: string;
   day: string;
