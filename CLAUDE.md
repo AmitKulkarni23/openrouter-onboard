@@ -17,8 +17,7 @@ openrouter-onboard/
 ├── .github/workflows/   # CI/CD pipelines
 ├── docs/                # Project documentation and references
 ├── frontend/            # Next.js application
-├── CLAUDE.md
-└── CONTEXT.md
+└── CLAUDE.md
 ```
 
 ## Git Style

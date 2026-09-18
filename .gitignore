@@ -26,6 +26,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# project context (local only)
+CONTEXT.md
+
 # misc
 .DS_Store
 *.tgz
