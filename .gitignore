@@ -28,6 +28,9 @@ yarn-error.log*
 
 # project context (local only)
 CONTEXT.md
+SCRIPT.md
+.impeccable/
+.github/
 
 # misc
 .DS_Store

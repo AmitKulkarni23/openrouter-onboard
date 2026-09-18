@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     }
 
     const url = `${OPENROUTER_BASE}${endpoint}`;
-    const maskedKey = apiKey.slice(0, 12) + "..." + apiKey.slice(-4);
+    const maskedKey = apiKey.slice(0, 8) + "***" + apiKey.slice(-2);
 
     console.log(`[proxy] ${method} ${url} | key: ${maskedKey}`);
     if (body) console.log(`[proxy] body: ${JSON.stringify(body)}`);
