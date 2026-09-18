@@ -86,8 +86,10 @@ export default function Home() {
     let result: ValidationResult;
 
     if (connected && hasAnyKey) {
+      console.log(`[verify] connected mode | step ${currentStep} | mgmt: ${mgmtKey ? "present" : "missing"} | api: ${apiKey ? "present" : "missing"}`);
       result = await validateStepConnected(currentStep, parsedManifest, mgmtKey || "", apiKey || "");
     } else {
+      console.log(`[verify] local mode | step ${currentStep} | connected: ${connected} | hasAnyKey: ${hasAnyKey}`);
       await new Promise((r) => setTimeout(r, 600 + Math.random() * 400));
       result = validateStep(currentStep, parsedManifest);
     }
