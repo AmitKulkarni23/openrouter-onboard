@@ -2,14 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 
-/**
- * Proxies requests to OpenRouter's API so the API key never touches the browser.
- *
- * Usage from the client:
- *   POST /api/openrouter
- *   Body: { endpoint: "/auth/key", method: "GET", apiKey: "sk-or-..." }
- *   or:   { endpoint: "/chat/completions", method: "POST", apiKey: "sk-or-...", body: {...} }
- */
 export async function POST(req: NextRequest) {
   try {
     const { endpoint, method = "GET", apiKey, body } = await req.json();
@@ -22,11 +14,14 @@ export async function POST(req: NextRequest) {
     }
 
     const url = `${OPENROUTER_BASE}${endpoint}`;
+    const maskedKey = apiKey.slice(0, 12) + "..." + apiKey.slice(-4);
+
+    console.log(`[proxy] ${method} ${url} | key: ${maskedKey}`);
+    if (body) console.log(`[proxy] body: ${JSON.stringify(body)}`);
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      // Required by OpenRouter for identifying the app
       "HTTP-Referer": "https://github.com/AmitKulkarni23/openrouter-onboard",
       "X-Title": "OpenRouter Onboard",
     };
@@ -36,7 +31,6 @@ export async function POST(req: NextRequest) {
       headers,
     };
 
-    // Only attach body for POST/PUT/PATCH requests
     if (body && ["POST", "PUT", "PATCH"].includes(method.toUpperCase())) {
       fetchOptions.body = JSON.stringify(body);
     }
@@ -44,7 +38,11 @@ export async function POST(req: NextRequest) {
     const response = await fetch(url, fetchOptions);
     const data = await response.json();
 
+    console.log(`[proxy] ${method} ${endpoint} → ${response.status}`);
+    console.log(`[proxy] response: ${JSON.stringify(data).slice(0, 500)}`);
+
     if (!response.ok) {
+      console.error(`[proxy] ERROR ${response.status}: ${JSON.stringify(data)}`);
       return NextResponse.json(
         { error: data.error?.message || `OpenRouter returned ${response.status}`, data },
         { status: response.status }
@@ -54,6 +52,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Proxy request failed";
+    console.error(`[proxy] EXCEPTION: ${message}`);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
