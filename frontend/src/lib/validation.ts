@@ -186,14 +186,14 @@ function validateRouting(m: Manifest): ValidationResult {
     }
   }
 
-  const budget = get(m, "presets.cost_limits.monthly_budget");
+  const budget = get(m, "cost_limits.monthly_budget");
   checks.push({
     label: "Monthly budget",
     passed: typeof budget === "number" && budget > 0,
     detail: typeof budget === "number" ? `$${budget}/mo` : "No monthly budget set — unbounded spend risk",
   });
 
-  const perReq = get(m, "presets.cost_limits.per_request_max");
+  const perReq = get(m, "cost_limits.per_request_max");
   checks.push({
     label: "Per-request limit",
     passed: typeof perReq === "number" && perReq > 0,

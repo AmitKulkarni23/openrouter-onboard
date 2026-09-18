@@ -214,7 +214,7 @@ async function validateRoutingConnected(m: Manifest, apiKey: string): Promise<Va
     });
   }
 
-  const budget = get(m, "presets.cost_limits.monthly_budget");
+  const budget = get(m, "cost_limits.monthly_budget");
   checks.push({
     label: "Monthly budget",
     passed: typeof budget === "number" && budget > 0,

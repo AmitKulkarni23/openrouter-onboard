@@ -45,10 +45,10 @@ presets:
     max_tokens: 4096
     temperature: 0.7
 
-  cost_limits:
-    monthly_budget: null
-    per_request_max: null
-    alert_threshold: null
+cost_limits:
+  monthly_budget: null
+  per_request_max: null
+  alert_threshold: null
 
 broadcast:
   enabled: false
