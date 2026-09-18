@@ -300,7 +300,7 @@ export default function Home() {
         </Box>
 
         {/* ── Divider ── */}
-        <Box sx={{ width: 1, bgcolor: "grid", flexShrink: 0 }} />
+        <Box sx={{ width: "1px", bgcolor: "grid", flexShrink: 0 }} />
 
         {/* ── Checklist Pane ── */}
         <Box

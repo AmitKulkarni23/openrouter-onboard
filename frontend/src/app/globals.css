@@ -16,24 +16,8 @@
   --editor-line: #2A2D3E;
 }
 
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
 html, body {
   height: 100%;
-  overflow: hidden;
-}
-
-body {
-  font-family: var(--font-body);
-  font-size: 14px;
-  color: var(--ink);
-  background: var(--surface);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 ::selection {
@@ -41,18 +25,6 @@ body {
   color: var(--ink);
 }
 
-:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 2px;
-}
-
-input, textarea, button {
+textarea {
   font-family: inherit;
-  font-size: inherit;
-}
-
-button {
-  cursor: pointer;
-  border: none;
-  background: none;
 }
