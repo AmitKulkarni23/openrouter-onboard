@@ -44,7 +44,7 @@ presets:
   - name: customer-support
     description: "Use-case preset — names the job, not the model"
     models:
-      - anthropic/claude-sonnet-4-20250514
+      - anthropic/claude-sonnet-4
     fallback_models: []
     max_tokens: 4096
     temperature: 0.7
