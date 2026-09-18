@@ -116,6 +116,16 @@ async function validateWorkspacesConnected(m: Manifest, apiKey: string): Promise
   });
 
   if (Array.isArray(workspaces)) {
+    const noBudget = workspaces.filter((ws) => typeof ws.budget !== "number" || ws.budget <= 0);
+    checks.push({
+      label: "Workspace budgets",
+      passed: noBudget.length === 0,
+      detail:
+        noBudget.length === 0
+          ? "All workspaces have budgets"
+          : `${noBudget.length} workspace(s) without a budget`,
+    });
+
     const allKeys = workspaces.flatMap(
       (ws) => (ws.api_keys as Array<Record<string, unknown>>) || []
     );
@@ -149,11 +159,11 @@ async function validateSecurityConnected(m: Manifest): Promise<ValidationResult>
 async function validateRoutingConnected(m: Manifest, apiKey: string): Promise<ValidationResult> {
   const checks: Check[] = [];
 
-  const presets = get(m, "routing.presets") as Array<Record<string, unknown>> | undefined;
+  const presets = get(m, "presets") as Array<Record<string, unknown>> | undefined;
   checks.push({
-    label: "Routing presets",
+    label: "Presets defined",
     passed: Array.isArray(presets) && presets.length > 0,
-    detail: Array.isArray(presets) ? `${presets.length} preset(s)` : "No routing presets defined",
+    detail: Array.isArray(presets) ? `${presets.length} preset(s)` : "No presets defined — name use cases, not models",
   });
 
   // Fetch available models from OpenRouter
@@ -204,7 +214,7 @@ async function validateRoutingConnected(m: Manifest, apiKey: string): Promise<Va
     });
   }
 
-  const budget = get(m, "routing.cost_limits.monthly_budget");
+  const budget = get(m, "presets.cost_limits.monthly_budget");
   checks.push({
     label: "Monthly budget",
     passed: typeof budget === "number" && budget > 0,
@@ -224,14 +234,14 @@ async function validateObservabilityConnected(m: Manifest): Promise<ValidationRe
 }
 
 /**
- * Step 6 — Production Readiness
+ * Step 6 — Go-Live Sign-Off
  * Calls POST /chat/completions to run a real test inference through OpenRouter.
  */
-async function validateProductionConnected(m: Manifest, apiKey: string): Promise<ValidationResult> {
+async function validateGoLiveConnected(m: Manifest, apiKey: string): Promise<ValidationResult> {
   const checks: Check[] = [];
 
-  // Run a real test inference
-  const presets = get(m, "routing.presets") as Array<Record<string, unknown>> | undefined;
+  // Run a real test inference using the first preset's primary model
+  const presets = get(m, "presets") as Array<Record<string, unknown>> | undefined;
   const testModel = Array.isArray(presets) && presets.length > 0
     ? ((presets[0].models as string[]) || ["openai/gpt-4o-mini"])[0]
     : "openai/gpt-4o-mini";
@@ -269,12 +279,12 @@ async function validateProductionConnected(m: Manifest, apiKey: string): Promise
     });
   }
 
-  // Also check local production readiness flags
+  // Also check local go-live sign-off flags
   const fields: [string, string][] = [
-    ["production_readiness.load_test_completed", "Load test completed"],
-    ["production_readiness.failover_verified", "Failover verified"],
-    ["production_readiness.monitoring_configured", "Monitoring configured"],
-    ["production_readiness.runbook_documented", "Runbook documented"],
+    ["go_live.test_inference_passed", "Test inference passed"],
+    ["go_live.traces_verified", "Traces verified in monitoring"],
+    ["go_live.monitoring_confirmed", "Monitoring confirmed"],
+    ["go_live.sign_off_completed", "Written sign-off completed"],
   ];
   for (const [path, label] of fields) {
     const val = get(m, path);
@@ -303,7 +313,7 @@ export async function validateStepConnected(
     (m: Manifest) => validateSecurityConnected(m),
     (m: Manifest) => validateRoutingConnected(m, apiKey),
     (m: Manifest) => validateObservabilityConnected(m),
-    (m: Manifest) => validateProductionConnected(m, apiKey),
+    (m: Manifest) => validateGoLiveConnected(m, apiKey),
   ];
   return validators[stepIndex](manifest);
 }

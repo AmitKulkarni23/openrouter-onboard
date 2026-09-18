@@ -31,7 +31,7 @@ export function validateStep(stepIndex: number, manifest: Manifest): ValidationR
     validateSecurity,
     validateRouting,
     validateObservability,
-    validateProductionReadiness,
+    validateGoLive,
   ];
   return validators[stepIndex](manifest);
 }
@@ -81,6 +81,16 @@ function validateWorkspaces(m: Manifest): ValidationResult {
   });
 
   if (Array.isArray(workspaces)) {
+    const noBudget = workspaces.filter((ws) => typeof ws.budget !== "number" || ws.budget <= 0);
+    checks.push({
+      label: "Workspace budgets",
+      passed: noBudget.length === 0,
+      detail:
+        noBudget.length === 0
+          ? "All workspaces have budgets"
+          : `${noBudget.length} workspace(s) without a budget`,
+    });
+
     const allKeys = workspaces.flatMap(
       (ws) => (ws.api_keys as Array<Record<string, unknown>>) || []
     );
@@ -112,15 +122,15 @@ function validateWorkspaces(m: Manifest): ValidationResult {
 function validateSecurity(m: Manifest): ValidationResult {
   const checks: Check[] = [];
 
-  const sso = get(m, "security.sso_enabled");
+  const sso = get(m, "governance.sso_enabled");
   checks.push({
     label: "SSO enabled",
     passed: sso === true,
-    detail: sso === true ? "SSO active" : "SSO disabled — enterprise security requires SSO",
+    detail: sso === true ? "SSO active" : "SSO disabled — enterprise governance requires SSO",
   });
 
   if (sso === true) {
-    const provider = get(m, "security.sso_provider") as string | undefined;
+    const provider = get(m, "governance.sso_provider") as string | undefined;
     checks.push({
       label: "SSO provider",
       passed: !!provider,
@@ -128,21 +138,21 @@ function validateSecurity(m: Manifest): ValidationResult {
     });
   }
 
-  const scim = get(m, "security.scim_provisioning");
+  const scim = get(m, "governance.scim_provisioning");
   checks.push({
     label: "SCIM provisioning",
     passed: scim === true,
     detail: scim === true ? "SCIM active" : "SCIM disabled — manual user management required",
   });
 
-  const zdr = get(m, "security.zero_data_retention");
+  const zdr = get(m, "governance.zero_data_retention");
   checks.push({
-    label: "Zero data retention",
+    label: "Zero Data Retention",
     passed: zdr === true,
     detail: zdr === true ? "ZDR active" : "ZDR disabled — data may be retained by providers",
   });
 
-  const guardrails = get(m, "security.content_guardrails");
+  const guardrails = get(m, "governance.content_guardrails");
   checks.push({
     label: "Content guardrails",
     passed: guardrails === true,
@@ -154,12 +164,12 @@ function validateSecurity(m: Manifest): ValidationResult {
 
 function validateRouting(m: Manifest): ValidationResult {
   const checks: Check[] = [];
-  const presets = get(m, "routing.presets") as Array<Record<string, unknown>> | undefined;
+  const presets = get(m, "presets") as Array<Record<string, unknown>> | undefined;
 
   checks.push({
-    label: "Routing presets",
+    label: "Presets defined",
     passed: Array.isArray(presets) && presets.length > 0,
-    detail: Array.isArray(presets) ? `${presets.length} preset(s)` : "No routing presets defined",
+    detail: Array.isArray(presets) ? `${presets.length} preset(s)` : "No presets defined — name use cases, not models",
   });
 
   if (Array.isArray(presets)) {
@@ -176,14 +186,14 @@ function validateRouting(m: Manifest): ValidationResult {
     }
   }
 
-  const budget = get(m, "routing.cost_limits.monthly_budget");
+  const budget = get(m, "presets.cost_limits.monthly_budget");
   checks.push({
     label: "Monthly budget",
     passed: typeof budget === "number" && budget > 0,
     detail: typeof budget === "number" ? `$${budget}/mo` : "No monthly budget set — unbounded spend risk",
   });
 
-  const perReq = get(m, "routing.cost_limits.per_request_max");
+  const perReq = get(m, "presets.cost_limits.per_request_max");
   checks.push({
     label: "Per-request limit",
     passed: typeof perReq === "number" && perReq > 0,
@@ -196,24 +206,24 @@ function validateRouting(m: Manifest): ValidationResult {
 function validateObservability(m: Manifest): ValidationResult {
   const checks: Check[] = [];
 
-  const enabled = get(m, "observability.broadcast_enabled");
+  const enabled = get(m, "broadcast.enabled");
   checks.push({
     label: "Broadcast enabled",
     passed: enabled === true,
-    detail: enabled === true ? "Broadcasting active" : "Broadcasting disabled — no visibility into requests",
+    detail: enabled === true ? "Broadcasting active" : "Broadcast disabled — no visibility into requests",
   });
 
-  const destinations = get(m, "observability.destinations") as string[] | undefined;
+  const destinations = get(m, "broadcast.destinations") as string[] | undefined;
   checks.push({
-    label: "Destinations configured",
+    label: "Broadcast destinations",
     passed: Array.isArray(destinations) && destinations.length > 0,
     detail:
       Array.isArray(destinations) && destinations.length > 0
         ? destinations.join(", ")
-        : "No broadcast destinations",
+        : "No Broadcast destinations — traces won't reach your monitoring stack",
   });
 
-  const retention = get(m, "observability.log_retention_days") as number | undefined;
+  const retention = get(m, "broadcast.log_retention_days") as number | undefined;
   checks.push({
     label: "Log retention",
     passed: typeof retention === "number" && retention >= 7,
@@ -226,14 +236,14 @@ function validateObservability(m: Manifest): ValidationResult {
   return { passed: checks.every((c) => c.passed), checks };
 }
 
-function validateProductionReadiness(m: Manifest): ValidationResult {
+function validateGoLive(m: Manifest): ValidationResult {
   const checks: Check[] = [];
 
   const fields: [string, string][] = [
-    ["production_readiness.load_test_completed", "Load test completed"],
-    ["production_readiness.failover_verified", "Failover verified"],
-    ["production_readiness.monitoring_configured", "Monitoring configured"],
-    ["production_readiness.runbook_documented", "Runbook documented"],
+    ["go_live.test_inference_passed", "Test inference passed"],
+    ["go_live.traces_verified", "Traces verified in monitoring"],
+    ["go_live.monitoring_confirmed", "Monitoring confirmed"],
+    ["go_live.sign_off_completed", "Written sign-off completed"],
   ];
 
   for (const [path, label] of fields) {

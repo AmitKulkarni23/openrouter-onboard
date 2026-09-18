@@ -13,6 +13,7 @@ organization:
 workspaces:
   - name: production
     description: Production inference workload
+    budget: null
     api_keys:
       - name: dev-yolo-key
         scope: all
@@ -21,41 +22,42 @@ workspaces:
 
   - name: staging
     description: Pre-production testing
+    budget: 500
     api_keys:
       - name: staging-key
         scope: workspace
         rate_limit: 100
         description: Staging environment key
 
-security:
+governance:
   sso_enabled: false
   sso_provider: null
   scim_provisioning: false
   zero_data_retention: false
   content_guardrails: false
 
-routing:
-  presets:
-    - name: default-route
-      models:
-        - anthropic/claude-sonnet-4-20250514
-      fallback_models: []
-      max_tokens: 4096
-      temperature: 0.7
+presets:
+  - name: customer-support
+    description: "Use-case preset — names the job, not the model"
+    models:
+      - anthropic/claude-sonnet-4-20250514
+    fallback_models: []
+    max_tokens: 4096
+    temperature: 0.7
 
   cost_limits:
     monthly_budget: null
     per_request_max: null
     alert_threshold: null
 
-observability:
-  broadcast_enabled: false
+broadcast:
+  enabled: false
   destinations: []
   log_retention_days: 0
 
-production_readiness:
-  load_test_completed: false
-  failover_verified: false
-  monitoring_configured: false
-  runbook_documented: false
+go_live:
+  test_inference_passed: false
+  traces_verified: false
+  monitoring_confirmed: false
+  sign_off_completed: false
 `;
