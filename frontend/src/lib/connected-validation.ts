@@ -292,7 +292,7 @@ async function validateGoLiveConnected(m: Manifest, apiKey: string): Promise<Val
 
   const { ok, data } = await proxyCall("/chat/completions", apiKey, "POST", {
     model: testModel,
-    messages: [{ role: "user", content: "Respond with exactly: INFERENCE_OK" }],
+    messages: [{ role: "user", content: "What is life" }],
     max_tokens: 20,
   });
 
