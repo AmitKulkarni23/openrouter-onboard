@@ -12,7 +12,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import { useTheme } from "@mui/material/styles";
 import { DEFAULT_MANIFEST } from "@/lib/default-manifest";
 import { STEPS } from "@/lib/steps";
-import { validateStep, type ValidationResult, type Check } from "@/lib/validation";
+import type { ValidationResult, Check } from "@/lib/validation";
 import { validateStepConnected } from "@/lib/connected-validation";
 
 type StepState = "locked" | "active" | "passed" | "failed";
@@ -68,20 +68,17 @@ export default function Home() {
     ? ((parsedManifest as Record<string, Record<string, unknown>>).keys?.api_key as string | null)
     : null;
 
-  const hasAnyKey = !!mgmtKey || !!apiKey;
-
   const handleVerify = useCallback(async () => {
     if (currentStep === -1 || !parsedManifest) return;
+
+    if (!mgmtKey && !apiKey) {
+      setParseError("Add your keys under keys.management_key and keys.api_key to verify");
+      return;
+    }
+
     setVerifying(true);
 
-    let result: ValidationResult;
-
-    if (hasAnyKey) {
-      result = await validateStepConnected(currentStep, parsedManifest, mgmtKey || "", apiKey || "");
-    } else {
-      await new Promise((r) => setTimeout(r, 600 + Math.random() * 400));
-      result = validateStep(currentStep, parsedManifest);
-    }
+    const result = await validateStepConnected(currentStep, parsedManifest, mgmtKey || "", apiKey || "");
 
     const newStates = [...stepStates];
     const newResults = [...stepResults];
@@ -100,7 +97,7 @@ export default function Home() {
     setStepStates(newStates);
     setStepResults(newResults);
     setVerifying(false);
-  }, [currentStep, parsedManifest, stepStates, stepResults, mgmtKey, apiKey, hasAnyKey]);
+  }, [currentStep, parsedManifest, stepStates, stepResults, mgmtKey, apiKey]);
 
   const lineCount = yamlText.split("\n").length;
   const allPassed = stepStates.every((s) => s === "passed");
@@ -149,18 +146,18 @@ export default function Home() {
               width: 6,
               height: 6,
               borderRadius: "50%",
-              bgcolor: hasAnyKey ? "pass" : "inkMuted",
+              bgcolor: mgmtKey && apiKey ? "pass" : mgmtKey || apiKey ? "warning.main" : "fail",
               flexShrink: 0,
             }}
           />
           <Typography variant="subtitle2" sx={{ color: "text.secondary" }}>
-            {hasAnyKey
-              ? mgmtKey && apiKey
-                ? "MGMT + API KEYS"
-                : mgmtKey
-                  ? "MGMT KEY ONLY"
-                  : "API KEY ONLY"
-              : "NO KEYS — LOCAL VALIDATION"}
+            {mgmtKey && apiKey
+              ? "MGMT + API KEYS"
+              : mgmtKey
+                ? "MGMT KEY ONLY — add api_key for inference"
+                : apiKey
+                  ? "API KEY ONLY — add management_key for provisioning"
+                  : "ADD KEYS TO VERIFY"}
           </Typography>
         </Box>
 
