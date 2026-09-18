@@ -1,16 +1,7 @@
-/**
- * Connected-mode validation: makes real API calls to OpenRouter
- * through the Next.js proxy at /api/openrouter.
- *
- * Each step validator returns the same { passed, checks } shape
- * as the local validator, but checks are populated from live API responses.
- */
-
 import type { ValidationResult, Check } from "./validation";
 
 type Manifest = Record<string, unknown>;
 
-// Helper to reach nested YAML values by dot-path
 function get(obj: unknown, path: string): unknown {
   return path.split(".").reduce((acc: unknown, key) => {
     if (acc && typeof acc === "object") return (acc as Record<string, unknown>)[key];
@@ -18,61 +9,45 @@ function get(obj: unknown, path: string): unknown {
   }, obj);
 }
 
-// All client-side calls route through the Next.js API proxy
 async function proxyCall(
   endpoint: string,
   apiKey: string,
   method: string = "GET",
   body?: unknown
-): Promise<{ ok: boolean; data: Record<string, unknown> }> {
+): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
   const res = await fetch("/api/openrouter", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ endpoint, method, apiKey, body }),
   });
   const data = await res.json();
-  return { ok: res.ok, data };
+  return { ok: res.ok, status: res.status, data };
 }
 
 /**
- * Step 1 — Org Setup
- * Calls GET /auth/key to verify the API key and confirm org identity.
+ * Step 1 — Activation
+ * Uses management key to GET /workspaces, proving the key works and the account exists.
  */
-async function validateOrgConnected(m: Manifest, apiKey: string): Promise<ValidationResult> {
+async function validateActivationConnected(m: Manifest, mgmtKey: string): Promise<ValidationResult> {
   const checks: Check[] = [];
 
-  const { ok, data } = await proxyCall("/auth/key", apiKey);
+  const { ok, data } = await proxyCall("/workspaces", mgmtKey);
 
   checks.push({
-    label: "API key valid",
+    label: "Management key valid",
     passed: ok,
-    detail: ok ? "Key authenticated successfully" : `Auth failed: ${data.error || "unknown error"}`,
+    detail: ok ? "Management key authenticated" : `Auth failed: ${(data.error as string) || "unknown error"}`,
   });
 
   if (ok) {
-    const label = (data as Record<string, unknown>).label as string | undefined;
+    const workspaces = (data as Record<string, unknown>).data as Array<Record<string, unknown>> | undefined;
     checks.push({
-      label: "Key label",
-      passed: !!label,
-      detail: label ? `"${label}"` : "No label on key",
-    });
-
-    const usage = (data as Record<string, unknown>).usage as number | undefined;
-    checks.push({
-      label: "Usage retrieved",
-      passed: typeof usage === "number",
-      detail: typeof usage === "number" ? `$${usage.toFixed(4)} used` : "Usage data unavailable",
-    });
-
-    const limit = (data as Record<string, unknown>).limit as number | null | undefined;
-    checks.push({
-      label: "Credit limit",
+      label: "Account workspaces",
       passed: true,
-      detail: typeof limit === "number" ? `$${limit} limit` : "Unlimited",
+      detail: `${Array.isArray(workspaces) ? workspaces.length : 0} existing workspace(s) on account`,
     });
   }
 
-  // Also run local checks for org fields
   const name = get(m, "organization.name") as string | undefined;
   checks.push({
     label: "Organization name",
@@ -80,98 +55,166 @@ async function validateOrgConnected(m: Manifest, apiKey: string): Promise<Valida
     detail: name ? `"${name}"` : "Missing organization name",
   });
 
+  const domain = get(m, "organization.domain") as string | undefined;
+  checks.push({
+    label: "Domain configured",
+    passed: !!domain && domain.includes("."),
+    detail: domain ? domain : "Missing domain",
+  });
+
   return { passed: checks.every((c) => c.passed), checks };
 }
 
 /**
- * Step 2 — Workspaces & API Keys
- * Calls GET /keys to list existing keys on the account.
+ * Step 2 — Workspaces & Budgets
+ * Creates workspaces, sets budgets, and provisions API keys using the management key.
  */
-async function validateWorkspacesConnected(m: Manifest, apiKey: string): Promise<ValidationResult> {
+async function validateWorkspacesConnected(m: Manifest, mgmtKey: string): Promise<ValidationResult> {
   const checks: Check[] = [];
+  const workspaces = get(m, "workspaces") as Array<Record<string, unknown>> | undefined;
 
-  const { ok, data } = await proxyCall("/keys", apiKey);
-
-  checks.push({
-    label: "Keys endpoint",
-    passed: ok,
-    detail: ok ? "Keys retrieved" : `Failed: ${data.error || "unknown error"}`,
-  });
-
-  if (ok && Array.isArray((data as Record<string, unknown>).data)) {
-    const keys = (data as Record<string, unknown>).data as Array<Record<string, unknown>>;
-    checks.push({
-      label: "Active keys",
-      passed: keys.length > 0,
-      detail: `${keys.length} key(s) on account`,
-    });
+  if (!Array.isArray(workspaces) || workspaces.length === 0) {
+    checks.push({ label: "Workspaces defined", passed: false, detail: "No workspaces in YAML" });
+    return { passed: false, checks };
   }
 
-  // Local checks for workspace YAML config
-  const workspaces = get(m, "workspaces") as Array<Record<string, unknown>> | undefined;
-  checks.push({
-    label: "Workspaces defined",
-    passed: Array.isArray(workspaces) && workspaces.length > 0,
-    detail: Array.isArray(workspaces) ? `${workspaces.length} workspace(s)` : "No workspaces defined",
-  });
+  // First, list existing workspaces to avoid duplicates
+  const { ok: listOk, data: listData } = await proxyCall("/workspaces", mgmtKey);
+  const existingWorkspaces = listOk && Array.isArray((listData as Record<string, unknown>).data)
+    ? ((listData as Record<string, unknown>).data as Array<Record<string, unknown>>)
+    : [];
+  const existingSlugs = new Set(existingWorkspaces.map((ws) => ws.slug as string));
 
-  if (Array.isArray(workspaces)) {
-    const noBudget = workspaces.filter((ws) => typeof ws.budget !== "number" || ws.budget <= 0);
-    checks.push({
-      label: "Workspace budgets",
-      passed: noBudget.length === 0,
-      detail:
-        noBudget.length === 0
-          ? "All workspaces have budgets"
-          : `${noBudget.length} workspace(s) without a budget`,
-    });
+  for (const ws of workspaces) {
+    const wsName = ws.name as string;
+    const slug = wsName.toLowerCase().replace(/\s+/g, "-");
+    const budget = ws.budget as number | null;
 
-    const allKeys = workspaces.flatMap(
-      (ws) => (ws.api_keys as Array<Record<string, unknown>>) || []
-    );
-    const unscopedKeys = allKeys.filter((k) => k.scope === "all" || !k.scope);
-    checks.push({
-      label: "API keys scoped",
-      passed: unscopedKeys.length === 0,
-      detail:
-        unscopedKeys.length === 0
-          ? "All keys properly scoped"
-          : `${unscopedKeys.length} unscoped key(s): ${unscopedKeys.map((k) => k.name).join(", ")}`,
-    });
+    // Create workspace if it doesn't exist (skip "default" — always exists)
+    if (existingSlugs.has(slug) || slug === "default") {
+      checks.push({
+        label: `Workspace "${wsName}"`,
+        passed: true,
+        detail: "Already exists",
+      });
+    } else {
+      const { ok, data } = await proxyCall("/workspaces", mgmtKey, "POST", {
+        name: wsName,
+        slug,
+        description: (ws.description as string) || "",
+      });
+      checks.push({
+        label: `Create workspace "${wsName}"`,
+        passed: ok,
+        detail: ok ? `Created (slug: ${slug})` : `Failed: ${(data.error as string) || JSON.stringify(data).slice(0, 100)}`,
+      });
+    }
+
+    // Set monthly budget if specified
+    if (typeof budget === "number" && budget > 0) {
+      const { ok: budgetOk, data: budgetData } = await proxyCall(
+        `/workspaces/${slug}/budgets/monthly`,
+        mgmtKey,
+        "PUT",
+        { limit_usd: budget }
+      );
+      checks.push({
+        label: `Budget for "${wsName}"`,
+        passed: budgetOk,
+        detail: budgetOk ? `$${budget}/mo set` : `Failed: ${(budgetData.error as string) || "unknown error"}`,
+      });
+    } else {
+      checks.push({
+        label: `Budget for "${wsName}"`,
+        passed: false,
+        detail: "No budget set — add budget: <amount> to the workspace",
+      });
+    }
+
+    // Provision API keys for this workspace
+    const wsKeys = (ws.api_keys as Array<Record<string, unknown>>) || [];
+    for (const key of wsKeys) {
+      const keyName = key.name as string;
+      const scope = key.scope as string;
+      const rateLimit = key.rate_limit as number | null;
+
+      if (scope === "all" || !scope) {
+        checks.push({
+          label: `Key "${keyName}" scope`,
+          passed: false,
+          detail: `Scope is "${scope || "unset"}" — change to "workspace"`,
+        });
+        continue;
+      }
+
+      if (!rateLimit) {
+        checks.push({
+          label: `Key "${keyName}" rate limit`,
+          passed: false,
+          detail: "No rate limit — set rate_limit to a number",
+        });
+        continue;
+      }
+
+      // Find workspace ID for key creation
+      const { ok: wsGetOk, data: wsGetData } = await proxyCall(`/workspaces/${slug}`, mgmtKey);
+      const workspaceId = wsGetOk ? ((wsGetData as Record<string, unknown>).data as Record<string, unknown>)?.id as string : null;
+
+      if (workspaceId) {
+        const { ok: keyOk, data: keyData } = await proxyCall("/keys", mgmtKey, "POST", {
+          name: keyName,
+          limit: rateLimit,
+          limit_reset: "daily",
+          workspace_id: workspaceId,
+        });
+        checks.push({
+          label: `Provision key "${keyName}"`,
+          passed: keyOk,
+          detail: keyOk
+            ? `Created in workspace "${wsName}" ($${rateLimit}/day limit)`
+            : `Failed: ${(keyData.error as string) || JSON.stringify(keyData).slice(0, 100)}`,
+        });
+      } else {
+        checks.push({
+          label: `Provision key "${keyName}"`,
+          passed: false,
+          detail: `Could not find workspace "${wsName}" to assign key`,
+        });
+      }
+    }
   }
 
   return { passed: checks.every((c) => c.passed), checks };
 }
 
 /**
- * Step 3 — Security & Compliance
- * Stays local-only (enterprise features can't be verified via public API).
+ * Step 3 — Governance
+ * Local-only — enterprise SSO/SCIM/ZDR can't be set via public API.
  */
-async function validateSecurityConnected(m: Manifest): Promise<ValidationResult> {
+async function validateGovernanceConnected(m: Manifest): Promise<ValidationResult> {
   const { validateStep } = await import("./validation");
   return validateStep(2, m);
 }
 
 /**
- * Step 4 — Model Routing & Presets
- * Calls GET /models to verify that configured models actually exist on OpenRouter.
+ * Step 4 — Presets & Routing
+ * Uses API key to GET /models and verify configured models exist in the catalog.
  */
 async function validateRoutingConnected(m: Manifest, apiKey: string): Promise<ValidationResult> {
   const checks: Check[] = [];
-
   const presets = get(m, "presets") as Array<Record<string, unknown>> | undefined;
+
   checks.push({
     label: "Presets defined",
     passed: Array.isArray(presets) && presets.length > 0,
-    detail: Array.isArray(presets) ? `${presets.length} preset(s)` : "No presets defined — name use cases, not models",
+    detail: Array.isArray(presets) ? `${presets.length} preset(s)` : "No presets defined",
   });
 
-  // Fetch available models from OpenRouter
   const { ok, data } = await proxyCall("/models", apiKey);
 
   if (ok && Array.isArray((data as Record<string, unknown>).data)) {
     const availableModels = ((data as Record<string, unknown>).data as Array<Record<string, unknown>>).map(
-      (m) => m.id as string
+      (model) => model.id as string
     );
 
     checks.push({
@@ -180,29 +223,24 @@ async function validateRoutingConnected(m: Manifest, apiKey: string): Promise<Va
       detail: `${availableModels.length} models available on OpenRouter`,
     });
 
-    // Check each preset's primary and fallback models against the catalog
     if (Array.isArray(presets)) {
       for (const preset of presets) {
         const models = (preset.models as string[]) || [];
         const fallbacks = (preset.fallback_models as string[]) || [];
-        const allModels = [...models, ...fallbacks];
 
-        for (const modelId of allModels) {
+        for (const modelId of [...models, ...fallbacks]) {
           const exists = availableModels.includes(modelId);
           checks.push({
             label: `Model "${modelId}"`,
             passed: exists,
-            detail: exists ? "Available" : "Not found in OpenRouter catalog",
+            detail: exists ? "Available in catalog" : "Not found in OpenRouter catalog",
           });
         }
 
         checks.push({
           label: `Fallback for "${preset.name}"`,
           passed: fallbacks.length > 0,
-          detail:
-            fallbacks.length > 0
-              ? `${fallbacks.length} fallback model(s)`
-              : "No fallback models configured",
+          detail: fallbacks.length > 0 ? `${fallbacks.length} fallback model(s)` : "No fallback models configured",
         });
       }
     }
@@ -210,7 +248,7 @@ async function validateRoutingConnected(m: Manifest, apiKey: string): Promise<Va
     checks.push({
       label: "Models catalog",
       passed: false,
-      detail: `Failed to fetch models: ${data.error || "unknown error"}`,
+      detail: `Failed to fetch: ${(data.error as string) || "unknown error"}`,
     });
   }
 
@@ -221,12 +259,19 @@ async function validateRoutingConnected(m: Manifest, apiKey: string): Promise<Va
     detail: typeof budget === "number" ? `$${budget}/mo` : "No monthly budget set",
   });
 
+  const perReq = get(m, "cost_limits.per_request_max");
+  checks.push({
+    label: "Per-request limit",
+    passed: typeof perReq === "number" && perReq > 0,
+    detail: typeof perReq === "number" ? `$${perReq}/request` : "No per-request limit",
+  });
+
   return { passed: checks.every((c) => c.passed), checks };
 }
 
 /**
- * Step 5 — Observability
- * Stays local-only (broadcast config is validated against the manifest).
+ * Step 5 — Broadcast & Observability
+ * Local-only — broadcast config is validated against the manifest.
  */
 async function validateObservabilityConnected(m: Manifest): Promise<ValidationResult> {
   const { validateStep } = await import("./validation");
@@ -235,12 +280,11 @@ async function validateObservabilityConnected(m: Manifest): Promise<ValidationRe
 
 /**
  * Step 6 — Go-Live Sign-Off
- * Calls POST /chat/completions to run a real test inference through OpenRouter.
+ * Uses API key to POST /chat/completions for a real test inference.
  */
 async function validateGoLiveConnected(m: Manifest, apiKey: string): Promise<ValidationResult> {
   const checks: Check[] = [];
 
-  // Run a real test inference using the first preset's primary model
   const presets = get(m, "presets") as Array<Record<string, unknown>> | undefined;
   const testModel = Array.isArray(presets) && presets.length > 0
     ? ((presets[0].models as string[]) || ["openai/gpt-4o-mini"])[0]
@@ -257,7 +301,7 @@ async function validateGoLiveConnected(m: Manifest, apiKey: string): Promise<Val
     passed: ok,
     detail: ok
       ? `Model ${testModel} responded successfully`
-      : `Inference failed: ${data.error || "unknown error"}`,
+      : `Inference failed: ${(data.error as string) || "unknown error"}`,
   });
 
   if (ok) {
@@ -279,7 +323,6 @@ async function validateGoLiveConnected(m: Manifest, apiKey: string): Promise<Val
     });
   }
 
-  // Also check local go-live sign-off flags
   const fields: [string, string][] = [
     ["go_live.test_inference_passed", "Test inference passed"],
     ["go_live.traces_verified", "Traces verified in monitoring"],
@@ -300,18 +343,19 @@ async function validateGoLiveConnected(m: Manifest, apiKey: string): Promise<Val
 
 /**
  * Main dispatcher for connected-mode validation.
- * Falls back to local validation if no API key is present.
+ * Steps 1-2 use management key, Steps 4+6 use API key, Steps 3+5 are local-only.
  */
 export async function validateStepConnected(
   stepIndex: number,
   manifest: Manifest,
+  mgmtKey: string,
   apiKey: string
 ): Promise<ValidationResult> {
   const validators = [
-    (m: Manifest) => validateOrgConnected(m, apiKey),
-    (m: Manifest) => validateWorkspacesConnected(m, apiKey),
-    (m: Manifest) => validateSecurityConnected(m),
-    (m: Manifest) => validateRoutingConnected(m, apiKey),
+    (m: Manifest) => validateActivationConnected(m, mgmtKey),
+    (m: Manifest) => validateWorkspacesConnected(m, mgmtKey),
+    (m: Manifest) => validateGovernanceConnected(m),
+    (m: Manifest) => validateRoutingConnected(m, apiKey || mgmtKey),
     (m: Manifest) => validateObservabilityConnected(m),
     (m: Manifest) => validateGoLiveConnected(m, apiKey),
   ];

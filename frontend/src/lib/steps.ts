@@ -1,8 +1,3 @@
-/**
- * Step definitions for the 14-day enterprise onboarding timeline.
- * Steps unlock sequentially — each must pass before the next activates.
- */
-
 export interface Step {
   title: string;
   day: string;
@@ -15,15 +10,15 @@ export const STEPS: Step[] = [
   {
     title: "ACTIVATION",
     day: "DAY 0–1",
-    description: "Organization live, admin signed in, first API key created.",
-    apiAction: "GET /auth/key — verify key and org identity",
+    description: "Organization live, admin signed in, management key ready.",
+    apiAction: "GET /workspaces — verify management key works",
     enterpriseOnly: false,
   },
   {
     title: "WORKSPACES & BUDGETS",
     day: "DAY 1–3",
-    description: "Map workspaces to teams, create scoped API keys, set workspace budgets and rate limits.",
-    apiAction: "GET /keys — list provisioned keys",
+    description: "Create workspaces, set budgets, provision scoped API keys with rate limits.",
+    apiAction: "POST /workspaces + PUT /budgets + POST /keys",
     enterpriseOnly: false,
   },
   {
@@ -51,7 +46,7 @@ export const STEPS: Step[] = [
     title: "GO-LIVE SIGN-OFF",
     day: "DAY 14",
     description: "Test inference end-to-end, verify traces flowing, confirm production readiness, written sign-off.",
-    apiAction: "POST /chat/completions — test inference",
+    apiAction: "POST /chat/completions — test inference with API key",
     enterpriseOnly: false,
   },
 ];

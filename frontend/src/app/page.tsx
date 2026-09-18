@@ -69,10 +69,15 @@ export default function Home() {
     }
   };
 
-  // Extract the API key from the YAML when connected mode needs it
-  const apiKey = parsedManifest
-    ? ((parsedManifest as Record<string, Record<string, unknown>>).organization?.api_key as string | null)
+  const mgmtKey = parsedManifest
+    ? ((parsedManifest as Record<string, Record<string, unknown>>).keys?.management_key as string | null)
     : null;
+
+  const apiKey = parsedManifest
+    ? ((parsedManifest as Record<string, Record<string, unknown>>).keys?.api_key as string | null)
+    : null;
+
+  const hasAnyKey = !!mgmtKey || !!apiKey;
 
   const handleVerify = useCallback(async () => {
     if (currentStep === -1 || !parsedManifest) return;
@@ -80,11 +85,9 @@ export default function Home() {
 
     let result: ValidationResult;
 
-    if (connected && apiKey) {
-      // Connected mode: make real API calls through the proxy
-      result = await validateStepConnected(currentStep, parsedManifest, apiKey);
+    if (connected && hasAnyKey) {
+      result = await validateStepConnected(currentStep, parsedManifest, mgmtKey || "", apiKey || "");
     } else {
-      // Local mode: validate YAML structure only
       await new Promise((r) => setTimeout(r, 600 + Math.random() * 400));
       result = validateStep(currentStep, parsedManifest);
     }
@@ -106,7 +109,7 @@ export default function Home() {
     setStepStates(newStates);
     setStepResults(newResults);
     setVerifying(false);
-  }, [currentStep, parsedManifest, stepStates, stepResults, connected, apiKey]);
+  }, [currentStep, parsedManifest, stepStates, stepResults, connected, mgmtKey, apiKey, hasAnyKey]);
 
   const lineCount = yamlText.split("\n").length;
   const allPassed = stepStates.every((s) => s === "passed");
@@ -160,7 +163,13 @@ export default function Home() {
             }}
           />
           <Typography variant="subtitle2" sx={{ color: "text.secondary" }}>
-            {connected ? "CONNECTED" : "LOCAL MODE"}
+            {connected
+              ? mgmtKey && apiKey
+                ? "CONNECTED — MGMT + API"
+                : mgmtKey
+                  ? "CONNECTED — MGMT KEY"
+                  : "CONNECTED — API KEY"
+              : "LOCAL MODE"}
           </Typography>
           {connected ? (
             <Button
@@ -183,8 +192,8 @@ export default function Home() {
               size="small"
               startIcon={<LinkIcon sx={{ fontSize: "14px !important" }} />}
               onClick={() => {
-                if (!apiKey) {
-                  setParseError("Set organization.api_key in the YAML to connect");
+                if (!hasAnyKey) {
+                  setParseError("Set keys.management_key or keys.api_key in the YAML to connect");
                   return;
                 }
                 setConnected(true);

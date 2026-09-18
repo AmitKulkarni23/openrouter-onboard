@@ -7,7 +7,11 @@ organization:
   domain: nullpointer.dev
   plan: enterprise
   admin_email: cto@nullpointer.dev
-  # Paste your OpenRouter API key here to enable connected mode
+
+keys:
+  # Management key — provisions workspaces, keys, presets (sk-or-mgmt-...)
+  management_key: null
+  # API key — runs inference and verifies models (sk-or-v1-...)
   api_key: null
 
 workspaces:
