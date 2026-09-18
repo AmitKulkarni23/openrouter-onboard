@@ -10,6 +10,21 @@ A local web tool that walks enterprise customers through OpenRouter's 14-day onb
 - **API Integration:** OpenRouter Management API (proxied through Next.js API routes)
 - **YAML Parsing:** js-yaml
 
+## Folder Structure
+
+```
+openrouter-onboard/
+├── .github/workflows/   # CI/CD pipelines
+├── docs/                # Project documentation and references
+├── frontend/            # Next.js application
+├── CLAUDE.md
+└── CONTEXT.md
+```
+
+## Git Style
+
+Each commit message must be at most two sentences or two phrases. First sentence states what changed, second states why.
+
 ## Running Locally
 
 ```sh
