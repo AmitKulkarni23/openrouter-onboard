@@ -33,13 +33,6 @@ workspaces:
         rate_limit: 100
         description: Staging environment key
 
-governance:
-  sso_enabled: false
-  sso_provider: null
-  scim_provisioning: false
-  zero_data_retention: false
-  content_guardrails: false
-
 presets:
   - name: customer-support
     description: "Use-case preset — names the job, not the model"

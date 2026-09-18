@@ -22,15 +22,8 @@ export const STEPS: Step[] = [
     enterpriseOnly: false,
   },
   {
-    title: "GOVERNANCE",
-    day: "DAY 3–5",
-    description: "SSO, SCIM group mappings, Zero Data Retention, content guardrails, data-retention policy.",
-    apiAction: "Validated locally — enterprise configuration",
-    enterpriseOnly: true,
-  },
-  {
     title: "PRESETS & ROUTING",
-    day: "DAY 5–7",
+    day: "DAY 3–5",
     description: "Create presets that name use cases instead of model versions. Configure model fallbacks and cost limits.",
     apiAction: "GET /models — verify models in catalog",
     enterpriseOnly: false,

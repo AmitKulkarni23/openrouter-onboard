@@ -28,7 +28,6 @@ export function validateStep(stepIndex: number, manifest: Manifest): ValidationR
   const validators = [
     validateOrgSetup,
     validateWorkspaces,
-    validateSecurity,
     validateRouting,
     validateObservability,
     validateGoLive,

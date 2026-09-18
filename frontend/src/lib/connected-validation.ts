@@ -188,16 +188,7 @@ async function validateWorkspacesConnected(m: Manifest, mgmtKey: string): Promis
 }
 
 /**
- * Step 3 — Governance
- * Local-only — enterprise SSO/SCIM/ZDR can't be set via public API.
- */
-async function validateGovernanceConnected(m: Manifest): Promise<ValidationResult> {
-  const { validateStep } = await import("./validation");
-  return validateStep(2, m);
-}
-
-/**
- * Step 4 — Presets & Routing
+ * Step 3 — Presets & Routing
  * Uses API key to GET /models and verify configured models exist in the catalog.
  */
 async function validateRoutingConnected(m: Manifest, apiKey: string): Promise<ValidationResult> {
@@ -270,12 +261,12 @@ async function validateRoutingConnected(m: Manifest, apiKey: string): Promise<Va
 }
 
 /**
- * Step 5 — Broadcast & Observability
+ * Step 4 — Broadcast & Observability
  * Local-only — broadcast config is validated against the manifest.
  */
 async function validateObservabilityConnected(m: Manifest): Promise<ValidationResult> {
   const { validateStep } = await import("./validation");
-  return validateStep(4, m);
+  return validateStep(3, m);
 }
 
 /**
@@ -354,7 +345,6 @@ export async function validateStepConnected(
   const validators = [
     (m: Manifest) => validateActivationConnected(m, mgmtKey),
     (m: Manifest) => validateWorkspacesConnected(m, mgmtKey),
-    (m: Manifest) => validateGovernanceConnected(m),
     (m: Manifest) => validateRoutingConnected(m, apiKey || mgmtKey),
     (m: Manifest) => validateObservabilityConnected(m),
     (m: Manifest) => validateGoLiveConnected(m, apiKey),
