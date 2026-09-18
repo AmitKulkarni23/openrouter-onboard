@@ -1,9 +1,3 @@
-/**
- * Main application page — split-pane layout with a YAML editor (left)
- * and sequential onboarding checklist (right). Supports two modes:
- *   LOCAL MODE  — validates YAML structure offline
- *   CONNECTED   — proxies real calls to OpenRouter's API via /api/openrouter
- */
 "use client";
 
 import { useState, useCallback, useRef } from "react";
@@ -15,8 +9,6 @@ import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
-import LinkIcon from "@mui/icons-material/Link";
-import LinkOffIcon from "@mui/icons-material/LinkOff";
 import { useTheme } from "@mui/material/styles";
 import { DEFAULT_MANIFEST } from "@/lib/default-manifest";
 import { STEPS } from "@/lib/steps";
@@ -40,7 +32,6 @@ export default function Home() {
     STEPS.map(() => null)
   );
   const [verifying, setVerifying] = useState(false);
-  const [connected, setConnected] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineCountRef = useRef<HTMLDivElement>(null);
 
@@ -85,11 +76,9 @@ export default function Home() {
 
     let result: ValidationResult;
 
-    if (connected && hasAnyKey) {
-      console.log(`[verify] connected mode | step ${currentStep} | mgmt: ${mgmtKey ? "present" : "missing"} | api: ${apiKey ? "present" : "missing"}`);
+    if (hasAnyKey) {
       result = await validateStepConnected(currentStep, parsedManifest, mgmtKey || "", apiKey || "");
     } else {
-      console.log(`[verify] local mode | step ${currentStep} | connected: ${connected} | hasAnyKey: ${hasAnyKey}`);
       await new Promise((r) => setTimeout(r, 600 + Math.random() * 400));
       result = validateStep(currentStep, parsedManifest);
     }
@@ -111,7 +100,7 @@ export default function Home() {
     setStepStates(newStates);
     setStepResults(newResults);
     setVerifying(false);
-  }, [currentStep, parsedManifest, stepStates, stepResults, connected, mgmtKey, apiKey, hasAnyKey]);
+  }, [currentStep, parsedManifest, stepStates, stepResults, mgmtKey, apiKey, hasAnyKey]);
 
   const lineCount = yamlText.split("\n").length;
   const allPassed = stepStates.every((s) => s === "passed");
@@ -125,7 +114,7 @@ export default function Home() {
 
   return (
     <Box sx={{ height: "100vh", display: "flex", flexDirection: "column", bgcolor: "surface" }}>
-      {/* ── Connection Bar ── */}
+      {/* ── Top Bar ── */}
       <Box
         sx={{
           display: "flex",
@@ -160,57 +149,19 @@ export default function Home() {
               width: 6,
               height: 6,
               borderRadius: "50%",
-              bgcolor: connected ? "pass" : "inkMuted",
+              bgcolor: hasAnyKey ? "pass" : "inkMuted",
               flexShrink: 0,
             }}
           />
           <Typography variant="subtitle2" sx={{ color: "text.secondary" }}>
-            {connected
+            {hasAnyKey
               ? mgmtKey && apiKey
-                ? "CONNECTED — MGMT + API"
+                ? "MGMT + API KEYS"
                 : mgmtKey
-                  ? "CONNECTED — MGMT KEY"
-                  : "CONNECTED — API KEY"
-              : "LOCAL MODE"}
+                  ? "MGMT KEY ONLY"
+                  : "API KEY ONLY"
+              : "NO KEYS — LOCAL VALIDATION"}
           </Typography>
-          {connected ? (
-            <Button
-              size="small"
-              startIcon={<LinkOffIcon sx={{ fontSize: "14px !important" }} />}
-              onClick={() => setConnected(false)}
-              sx={{
-                ml: 2,
-                fontSize: "0.6875rem",
-                color: "text.secondary",
-                borderColor: "grid",
-                "&:hover": { borderColor: "error.main", color: "error.main" },
-              }}
-              variant="outlined"
-            >
-              DISCONNECT
-            </Button>
-          ) : (
-            <Button
-              size="small"
-              startIcon={<LinkIcon sx={{ fontSize: "14px !important" }} />}
-              onClick={() => {
-                if (!hasAnyKey) {
-                  setParseError("Set keys.management_key or keys.api_key in the YAML to connect");
-                  return;
-                }
-                setConnected(true);
-              }}
-              sx={{
-                fontSize: "0.6875rem",
-                color: "text.secondary",
-                borderColor: "grid",
-                "&:hover": { borderColor: "primary.main", color: "primary.main" },
-              }}
-              variant="outlined"
-            >
-              CONNECT
-            </Button>
-          )}
         </Box>
 
         <Button
